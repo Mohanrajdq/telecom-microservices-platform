@@ -18,14 +18,14 @@ pipeline {
 
         stage('Build Application') {
             steps {
-                sh 'mvn clean package'
+                sh 'cd telecom-platform && mvn clean package'
             }
         }
 
         stage('Docker Build') {
             steps {
                 sh '''
-                docker build -t order-service:${IMAGE_TAG} order-service
+                docker build -t order-service:${IMAGE_TAG} telecom-platform/order-service
                 '''
             }
         }
@@ -56,9 +56,9 @@ pipeline {
             steps {
                 sh '''
                 sed -i "s|image: .*|image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:order-${IMAGE_TAG}|" \
-                k8s/order-deployment.yaml
+        telecom-platform/k8s/order-deployment.yaml
 
-                kubectl apply -f k8s/order-deployment.yaml
+        kubectl apply -f telecom-platform/k8s/order-deployment.yaml
                 '''
             }
         }
