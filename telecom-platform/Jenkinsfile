@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_ACCOUNT_ID = '575124957588'
+        AWS_REGION = 'ap-south-1'
+        ECR_REPO = 'telecom-order-platform'
+        IMAGE_TAG = "build-${BUILD_NUMBER}"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo 'Code checkout complete'
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh '''
+                docker build -t order-service:${IMAGE_TAG} order-service
+                '''
+            }
+        }
+
+        stage('ECR Login') {
+            steps {
+                sh '''
+                aws ecr get-login-password --region ${AWS_REGION} | \
+                docker login --username AWS --password-stdin \
+                ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                '''
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                sh '''
+                docker tag order-service:${IMAGE_TAG} \
+                ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:order-${IMAGE_TAG}
+
+                docker push \
+                ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:order-${IMAGE_TAG}
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                sh '''
+                sed -i "s|image: .*|image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:order-${IMAGE_TAG}|" \
+                k8s/order-deployment.yaml
+
+                kubectl apply -f k8s/order-deployment.yaml
+                '''
+            }
+        }
+
+        stage('Verify Rollout') {
+            steps {
+                sh '''
+                kubectl rollout status deployment/order-service -n telecom-prod
+                '''
+            }
+        }
+    }
+}
